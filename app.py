@@ -3,14 +3,14 @@ import json
 import math
 from typing import Iterator, Union
 import argparse
-
+import time
 from io import StringIO
 import os
 import pathlib
 import tempfile
 import zipfile
 import numpy as np
-
+import pyperclip
 import torch
 
 from src.config import VAD_INITIAL_PROMPT_MODE_VALUES, ApplicationConfig, VadInitialPromptMode
@@ -498,7 +498,7 @@ def create_ui(app_config: ApplicationConfig):
     common_inputs = lambda : [
         gr.Dropdown(choices=whisper_models, value=app_config.default_model_name, label="Model"),
         gr.Dropdown(choices=sorted(get_language_names()), label="Language", value=app_config.language),
-        gr.Text(label="URL (YouTube, etc.)"),
+        gr.Text(label="URL (YouTube, bilibili etc.)"),
         gr.File(label="Upload Files", file_count="multiple"),
         gr.Audio(source="microphone", type="filepath", label="Microphone Input"),
         gr.Dropdown(choices=["transcribe", "translate"], label="Task", value=app_config.task),
@@ -515,6 +515,15 @@ def create_ui(app_config: ApplicationConfig):
         gr.Checkbox(label="Word Timestamps - Highlight Words", value=app_config.highlight_words),
     ]
 
+    # TODO:send current tab result to another tab
+    def send_result_to_tab(result):
+        # write curent tab output as target tab input
+        # input_text = result
+        # switch current tab to target tab
+        test_postprocess.render()
+        # fill the gr.TextArea with input result
+        return gr.update(value=result)
+
     is_queue_mode = app_config.queue_concurrency_count is not None and app_config.queue_concurrency_count > 0    
 
     simple_transcribe = gr.Interface(fn=ui.transcribe_webui_simple_progress if is_queue_mode else ui.transcribe_webui_simple, 
@@ -527,6 +536,49 @@ def create_ui(app_config: ApplicationConfig):
         gr.Text(label="Transcription"), 
         gr.Text(label="Segments")
     ])
+
+    # reimplement above simple_transcribe using gr.Blocks() instead of gr.Interface()
+    simple_transcribe = gr.Blocks()
+    with simple_transcribe:
+        gr.Markdown(
+            """
+            Whisper是OpenAI开源的一个多语言语音识别模型，可以用来将音频转换为文本。\n
+            faster-whisper 是使用 CTranslate2 对 OpenAI Whisper 模型的重新实现，CTranslate2 是 Transformer 模型的快速推理引擎。\n
+            此实现比 OpenAI Whisper 快 4 倍，同时使用更少的内存，达到相同的精度。\n
+            对于非英语的较长音频文件（>10 分钟），建议您在 VAD 选项中选择 Silero VAD（Voice Activity Detector）。\n
+            最大音频文件长度：1800秒=30分钟。\n
+            项目github地址：https://github.com/wwdok/faster-whisper-webui
+            """
+        )
+        with gr.Row():
+            with gr.Column():
+                # *common_inputs(),
+                i1 = gr.Dropdown(choices=whisper_models, value=app_config.default_model_name, label="Model")
+                i2 = gr.Dropdown(choices=sorted(get_language_names()), label="Language", value=app_config.language)
+                i3 = gr.Text(label="URL (YouTube, bilibili etc.)")
+                i4 = gr.File(label="Upload Files", file_count="multiple")
+                i5 = gr.Audio(source="microphone", type="filepath", label="Microphone Input")
+                i6 = gr.Dropdown(choices=["transcribe", "translate"], label="Task", value=app_config.task)
+
+                # *common_vad_inputs(),
+                i7 = gr.Dropdown(choices=["none", "silero-vad", "silero-vad-skip-gaps", "silero-vad-expand-into-gaps", "periodic-vad"], value=app_config.default_vad, label="VAD")
+                i8 = gr.Number(label="VAD - Merge Window (s)", precision=0, value=app_config.vad_merge_window)
+                i9 = gr.Number(label="VAD - Max Merge Size (s)", precision=0, value=app_config.vad_max_merge_size)
+
+                # *common_word_timestamps_inputs(),
+                i10 = gr.Checkbox(label="Word Timestamps", value=app_config.word_timestamps)
+                i11 = gr.Checkbox(label="Word Timestamps - Highlight Words", value=app_config.highlight_words)
+
+                submit_btn = gr.Button("开始")
+            with gr.Column():
+                o1 = gr.File(label="Download")
+                o2 = gr.Text(label="Transcription").style(show_copy_button=True)
+                o3 = gr.Text(label="Segments")
+                # send_btn = gr.Button("发送到后处理标签页")
+        submit_btn.click(ui.transcribe_webui_simple_progress if is_queue_mode else ui.transcribe_webui_simple, 
+                        inputs=[i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11], 
+                        outputs=[o1, o2, o3])
+        # send_btn.click(send_result_to_tab, inputs=o2, outputs=input_text)
 
     full_description = ui_description + "\n\n\n\n" + "Be careful when changing some of the options in the full interface - this can cause the model to crash."
 
@@ -558,11 +610,119 @@ def create_ui(app_config: ApplicationConfig):
         gr.Number(label="No speech threshold", value=app_config.no_speech_threshold),
     ], outputs=[
         gr.File(label="Download"),
-        gr.Text(label="Transcription"), 
+        gr.Text(label="Transcription").style(show_copy_button=True), 
         gr.Text(label="Segments")
     ])
 
-    demo = gr.TabbedInterface([simple_transcribe, full_transcribe], tab_names=["Simple", "Full"])
+    def get_chunks(s, maxlength, separator=None):
+        start = 0
+        end = 0
+        while start + maxlength  < len(s) and end != -1:
+            if separator is not None:
+                end = s.rfind(separator, start, start + maxlength + 1)
+                segment = s[start:end]
+                yield segment.replace(separator, "")
+                start = end +1
+            else:
+                end = start + maxlength
+                yield s[start:end]
+                start = end
+
+        yield s[start:]
+        
+    def post_processing(text, apply_correction, auto_punc, separator, remove_words):
+        print(f"==>> separator: {separator}")
+        original_separator1 = " "
+        original_separator2 = ","
+        # 对于长文本需要先分段再推理，推理完再合并
+        # auto_punc：自动添加合适的、不同的标点符号
+        if auto_punc == True:
+            # 自动分段文本之前先去除原有的标点符号
+            text = text.replace(original_separator1, "") 
+            text = text.replace(original_separator2, "") 
+            import paddlehub as hub
+            model = hub.Module(name='auto_punc', version='1.0.0')
+            t3 = time.time()
+            # split long text to short text less than max_length and store them in list
+            max_length = 256
+            chunks = list(get_chunks(text, max_length))
+            results = []
+            results = model.add_puncs(chunks, max_length=max_length)
+            text = "，".join(results) # 分段处硬编码成使用中文逗号分割
+            t4 = time.time()
+            print("Auto punc finished. Cost time: {:.2f}s".format(t4-t3))
+        # print(f"==>> text after auto punc: {text}")
+        else:    
+            # 将空格全部统一替换成一种分隔符
+            if separator == "\\n":
+                # 直接使用separator会无法换行
+                text = text.replace(original_separator1, "\n") 
+                text = text.replace(original_separator2, "\n") 
+            else:
+                text = text.replace(original_separator1, separator)
+                text = text.replace(original_separator2, separator)
+
+        if apply_correction == True:
+            import pycorrector
+            print("Start correcting...")
+            t1 = time.time()
+            text, detail = pycorrector.correct(text)
+            t2 = time.time()
+            print("Correcting finished. Cost time: {:.2f}s".format(t2-t1))
+            print(f"==>> detail: {detail}")
+
+        # 去掉语气词
+        t5 = time.time()
+        remove_words = remove_words.split("，") + remove_words.split(",") + remove_words.split(" ")
+        for word in remove_words:
+            text = text.replace(word, "")
+        t6 = time.time()
+        print("Remove words finished. Cost time: {:.2f}s".format(t6-t5))
+
+        return text
+
+    def replace(text, src_word, target_word):
+        text = text.replace(src_word, target_word)
+        return text
+
+    def switch_punc_method(auto_punc):
+        if auto_punc == True:
+            # gr.update里的参数是给output的
+            return gr.update(visible=False) # 教程：https://www.gradio.app/guides/blocks-and-event-listeners#updating-component-configurations
+        else:
+            return gr.update(visible=True)
+        
+    def copy_text(text):
+        pyperclip.copy(text)
+        
+    test_postprocess = gr.Blocks()
+
+    with test_postprocess:
+        gr.Markdown(
+        """
+        后处理Simple或Full标签页输出的Transcription里的文本
+        """
+        )
+        with gr.Row():
+            with gr.Column():
+                input_text = gr.TextArea(label="输入文本", placeholder="在此处粘贴你的待处理文本")
+                apply_correction = gr.Checkbox(label="文本纠错", value=False)
+                auto_punc = gr.Checkbox(label="自动添加标点符号", value=False)
+                separator = gr.Text(label="分隔符(一般是逗号，或换行\\n)", value="，")
+                remove_words = gr.Text(label="去掉的语气词", value="呢，啊，哦，嗯，嘛，吧，呀，哈，哇，呐，噢，嘞，嘛")
+                submit_btn = gr.Button("提交")
+            with gr.Column():
+                output_text = gr.TextArea(label="输出文本", interactive=True).style(show_copy_button=True)
+                with gr.Row():
+                    src_word = gr.Text(label="替换前的字符")
+                    target_word = gr.Text(label="替换后的字符")
+                replace_btn = gr.Button("替换")
+                copy_btn = gr.Button("复制到剪贴板")
+        auto_punc.change(switch_punc_method, inputs=[auto_punc], outputs=[separator])
+        submit_btn.click(post_processing, inputs=[input_text, apply_correction, auto_punc, separator, remove_words], outputs=output_text)
+        replace_btn.click(replace, inputs=[output_text, src_word, target_word], outputs=output_text)
+        copy_btn.click(copy_text, inputs=output_text)
+    demo = gr.TabbedInterface([simple_transcribe, full_transcribe, test_postprocess], tab_names=["Simple", "Full", "Text Postprocess"])
 
     # Queue up the demo
     if is_queue_mode:

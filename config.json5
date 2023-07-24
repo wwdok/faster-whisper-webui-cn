@@ -90,7 +90,7 @@
     // Whether to perform X->X speech recognition ('transcribe') or X->English translation ('translate')
     "task": "transcribe",
     // Language spoken in the audio, specify None to perform language detection
-    "language": null,
+    "language": "Chinese",
     // The window size (in seconds) to merge voice segments
     "vad_merge_window": 5,
     // The maximum size (in seconds) of a voice segment

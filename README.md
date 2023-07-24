@@ -14,9 +14,9 @@ Check out the configuration reference at https://huggingface.co/docs/hub/spaces-
 
 Fork from : https://huggingface.co/spaces/aadnk/faster-whisper-webui/tree/main
 
-My changes:
+我的更改:
 
-* 
+* 新添加了一个文本后处理的tab
 
 # Running Locally
 
@@ -189,3 +189,9 @@ sudo docker run -d --gpus=all -p 7860:7860 \
 --mount type=bind,source=/home/administrator/.cache/whisper,target=/root/.cache/whisper \
 registry.gitlab.com/aadnk/whisper-webui:latest
 ```
+
+## TODO
+
+- [ ] 如果是一个视频列表，只下载第一个视频
+- [ ] ~~如果已经转录完了再选翻译任务，则不重新转录~~
+- [ ] ~~目前翻译任务只能由任意语言翻译成英语，不能指定其他语言，要能支持翻译成其他语言，至少支持中文~~

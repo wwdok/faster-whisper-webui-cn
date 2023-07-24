@@ -7,3 +7,9 @@ json5
 torch
 torchaudio
 more_itertools
+pycorrector
+paddlepaddle == 2.4.0
+paddlehub
+aiobotocore==2.3.4
+botocore==1.31.1
+pyperclip

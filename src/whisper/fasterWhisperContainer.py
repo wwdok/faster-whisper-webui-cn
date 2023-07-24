@@ -155,7 +155,7 @@ class FasterWhisperCallback(AbstractWhisperCallback):
                 print("[{}->{}] {}".format(format_timestamp(segment.start, True), format_timestamp(segment.end, True),
                                           segment.text))
 
-        text = " ".join([segment.text for segment in segments])
+        text = " ".join([segment.text for segment in segments]) # TODO：考虑加上分隔符
 
         # Convert the segments to a format that is easier to serialize
         whisper_segments = [{

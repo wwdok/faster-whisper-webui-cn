@@ -230,6 +230,7 @@ class AbstractTranscription(ABC):
 
                 # Append to output
                 result['text'] += segment_result['text']
+                # result['text'] += "。" # TODO：加上分隔符，但是是句号
                 result['segments'].extend(adjusted_segments)
 
                 # Increment detected language
