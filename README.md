@@ -18,6 +18,12 @@ Fork from : https://huggingface.co/spaces/aadnk/faster-whisper-webui/tree/main
 
 * 新添加了一个文本后处理的tab
 
+该App同时部署在：
+
+* HuggingFace Spaces: https://huggingface.co/spaces/wwdok/faster-whisper-webui-cn
+* OpenXLab: https://openxlab.org.cn/apps/detail/wwdok/faster-whisper-webui
+* ModelScope: https://modelscope.cn/studios/wwd123/faster-whisper-webui-cn
+
 # Running Locally
 
 To run this program locally, first install Python 3.9+ and Git. Then install Pytorch 10.1+ and all the other dependencies:
