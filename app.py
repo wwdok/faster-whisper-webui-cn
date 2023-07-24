@@ -547,7 +547,7 @@ def create_ui(app_config: ApplicationConfig):
             此实现比 OpenAI Whisper 快 4 倍，同时使用更少的内存，达到相同的精度。\n
             对于非英语的较长音频文件（>10 分钟），建议您在 VAD 选项中选择 Silero VAD（Voice Activity Detector）。\n
             最大音频文件长度：1800秒=30分钟。\n
-            项目github地址：https://github.com/wwdok/faster-whisper-webui
+            项目github地址：https://github.com/wwdok/faster-whisper-webui-cn
             """
         )
         with gr.Row():
