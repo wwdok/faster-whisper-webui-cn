@@ -203,8 +203,8 @@ class AbstractTranscription(ABC):
                 # Detected language
                 detected_language = languageCounter.most_common(1)[0][0] if len(languageCounter) > 0 else None
 
-                print("Running whisper from ", format_timestamp(segment_start), " to ", format_timestamp(segment_end), ", duration: ", 
-                    segment_duration, "expanded: ", segment_expand_amount, "prompt: ", segment_prompt, "language: ", detected_language)
+                # print("Running whisper from ", format_timestamp(segment_start), " to ", format_timestamp(segment_end), ", duration: ", 
+                    # segment_duration, "expanded: ", segment_expand_amount, "prompt: ", segment_prompt, "language: ", detected_language)
 
                 perf_start_time = time.perf_counter()
 
@@ -213,7 +213,7 @@ class AbstractTranscription(ABC):
                 segment_result = whisperCallable.invoke(segment_audio, segment_index, segment_prompt, detected_language, progress_listener=scaled_progress_listener)
 
                 perf_end_time = time.perf_counter()
-                print("Whisper took {} seconds".format(perf_end_time - perf_start_time))
+                # print("Whisper took {} seconds".format(perf_end_time - perf_start_time))
 
                 adjusted_segments = self.adjust_timestamp(segment_result["segments"], adjust_seconds=segment_start, max_source_time=segment_duration)
 

@@ -10,7 +10,6 @@ import pathlib
 import tempfile
 import zipfile
 import numpy as np
-import pyperclip
 import torch
 
 from src.config import VAD_INITIAL_PROMPT_MODE_VALUES, ApplicationConfig, VadInitialPromptMode
@@ -32,6 +31,7 @@ import gradio as gr
 
 from src.download import ExceededMaximumDuration, download_url
 from src.utils import optional_int, slugify, write_srt, write_vtt
+from src.utils import post_processing, replace, copy_text, on_token_change, num_tokens_from_messages, chat_with_gpt
 from src.vad import AbstractTranscription, NonSpeechStrategy, PeriodicTranscriptionConfig, TranscriptionConfig, VadPeriodicTranscription, VadSileroTranscription
 from src.whisper.abstractWhisperContainer import AbstractWhisperContainer
 from src.whisper.whisperFactory import create_whisper_container
@@ -614,102 +614,36 @@ def create_ui(app_config: ApplicationConfig):
         gr.Text(label="Segments")
     ])
 
-    def get_chunks(s, maxlength, separator=None):
-        start = 0
-        end = 0
-        while start + maxlength  < len(s) and end != -1:
-            if separator is not None:
-                end = s.rfind(separator, start, start + maxlength + 1)
-                segment = s[start:end]
-                yield segment.replace(separator, "")
-                start = end +1
-            else:
-                end = start + maxlength
-                yield s[start:end]
-                start = end
-
-        yield s[start:]
-        
-    def post_processing(text, apply_correction, auto_punc, separator, remove_words):
-        print(f"==>> separator: {separator}")
-        original_separator1 = " "
-        original_separator2 = ","
-        # 对于长文本需要先分段再推理，推理完再合并
-        # auto_punc：自动添加合适的、不同的标点符号
-        if auto_punc == True:
-            # 自动分段文本之前先去除原有的标点符号
-            text = text.replace(original_separator1, "") 
-            text = text.replace(original_separator2, "") 
-            import paddlehub as hub
-            model = hub.Module(name='auto_punc', version='1.0.0')
-            t3 = time.time()
-            # split long text to short text less than max_length and store them in list
-            max_length = 256
-            chunks = list(get_chunks(text, max_length))
-            results = []
-            results = model.add_puncs(chunks, max_length=max_length)
-            text = "，".join(results) # 分段处硬编码成使用中文逗号分割
-            t4 = time.time()
-            print("Auto punc finished. Cost time: {:.2f}s".format(t4-t3))
-        # print(f"==>> text after auto punc: {text}")
-        else:    
-            # 将空格全部统一替换成一种分隔符
-            if separator == "\\n":
-                # 直接使用separator会无法换行
-                text = text.replace(original_separator1, "\n") 
-                text = text.replace(original_separator2, "\n") 
-            else:
-                text = text.replace(original_separator1, separator)
-                text = text.replace(original_separator2, separator)
-
-        if apply_correction == True:
-            import pycorrector
-            print("Start correcting...")
-            t1 = time.time()
-            text, detail = pycorrector.correct(text)
-            t2 = time.time()
-            print("Correcting finished. Cost time: {:.2f}s".format(t2-t1))
-            print(f"==>> detail: {detail}")
-
-        # 去掉语气词
-        t5 = time.time()
-        remove_words = remove_words.split("，") + remove_words.split(",") + remove_words.split(" ")
-        for word in remove_words:
-            text = text.replace(word, "")
-        t6 = time.time()
-        print("Remove words finished. Cost time: {:.2f}s".format(t6-t5))
-
-        return text
-
-    def replace(text, src_word, target_word):
-        text = text.replace(src_word, target_word)
-        return text
-
-    def switch_punc_method(auto_punc):
-        if auto_punc == True:
-            # gr.update里的参数是给output的
-            return gr.update(visible=False) # 教程：https://www.gradio.app/guides/blocks-and-event-listeners#updating-component-configurations
+    def switch_punc_method(use_chatgpt, auto_punc):
+        if use_chatgpt == True and auto_punc == True:
+            return gr.update(), gr.update(), gr.update()
+        elif use_chatgpt == True and auto_punc == False:
+            return gr.update(visible=True), gr.update(visible=True, interactive=True), gr.update(visible=False)
+        elif use_chatgpt == False and auto_punc == True:
+            return gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
         else:
-            return gr.update(visible=True)
-        
-    def copy_text(text):
-        pyperclip.copy(text)
-        
+            return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True)
+    
     test_postprocess = gr.Blocks()
 
     with test_postprocess:
         gr.Markdown(
         """
-        后处理Simple或Full标签页输出的Transcription里的文本
+        后处理Simple或Full标签页输出的Transcription里的文本，也可以单独使用
         """
         )
         with gr.Row():
             with gr.Column():
                 input_text = gr.TextArea(label="输入文本", placeholder="在此处粘贴你的待处理文本")
-                apply_correction = gr.Checkbox(label="文本纠错", value=False)
-                auto_punc = gr.Checkbox(label="自动添加标点符号", value=False)
-                separator = gr.Text(label="分隔符(一般是逗号，或换行\\n)", value="，")
-                remove_words = gr.Text(label="去掉的语气词", value="呢，啊，哦，嗯，嘛，吧，呀，哈，哇，呐，噢，嘞，嘛")
+                tokens_count = gr.Markdown(label="Tokens 计数: 0", visible=False)
+                use_chatgpt = gr.Checkbox(label="使用ChatGPT自动纠正错别字和添加标点符号", value=False)
+                user_token = gr.Textbox(value='', placeholder="OpenAI API Key", type="password", visible=False,
+                                        label="输入你的 OpenAI API Key. 你可以从这里(https://platform.openai.com/account/api-keys)获取.\
+                                        \n⚠ 注意！使用ChatGPT来处理文本会消耗大量的tokens，免费版用户谨慎使用！")
+                apply_correction = gr.Checkbox(label="使用pycorrector纠正错别字", value=False)
+                auto_punc = gr.Checkbox(label="使用paddle auto punc自动添加标点符号", value=False)
+                separator = gr.Text(label="使用统一的标点符号(比如逗号，或换行\\n)", value="，")
+                remove_words = gr.Text(label="去掉的语气助词", value="呢，啊，哦，嗯，嘛，吧，呀，哈，哇，呐，噢，嘞，嘛")
                 submit_btn = gr.Button("提交")
             with gr.Column():
                 output_text = gr.TextArea(label="输出文本", interactive=True).style(show_copy_button=True)
@@ -718,10 +652,14 @@ def create_ui(app_config: ApplicationConfig):
                     target_word = gr.Text(label="替换后的字符")
                 replace_btn = gr.Button("替换")
                 copy_btn = gr.Button("复制到剪贴板")
-        auto_punc.change(switch_punc_method, inputs=[auto_punc], outputs=[separator])
-        submit_btn.click(post_processing, inputs=[input_text, apply_correction, auto_punc, separator, remove_words], outputs=output_text)
+        input_text.change(num_tokens_from_messages, inputs=[input_text], outputs=[tokens_count])
+        auto_punc.change(switch_punc_method, inputs=[use_chatgpt, auto_punc], outputs=[tokens_count, user_token, separator])
+        use_chatgpt.change(switch_punc_method, inputs=[use_chatgpt, auto_punc], outputs=[tokens_count, user_token, separator])
+        user_token.change(on_token_change, inputs=[user_token], outputs=[])
+        submit_btn.click(post_processing, inputs=[input_text, use_chatgpt, user_token, apply_correction, auto_punc, separator, remove_words], outputs=output_text)
         replace_btn.click(replace, inputs=[output_text, src_word, target_word], outputs=output_text)
         copy_btn.click(copy_text, inputs=output_text)
+    
     demo = gr.TabbedInterface([simple_transcribe, full_transcribe, test_postprocess], tab_names=["Simple", "Full", "Text Postprocess"])
 
     # Queue up the demo

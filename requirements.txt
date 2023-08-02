@@ -10,6 +10,8 @@ more_itertools
 pycorrector
 paddlepaddle == 2.4.0
 paddlehub
-aiobotocore
-botocore
+-U aiobotocore
+-U botocore
 pyperclip
+openai
+tiktoken

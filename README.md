@@ -16,7 +16,12 @@ Fork from : https://huggingface.co/spaces/aadnk/faster-whisper-webui/tree/main
 
 我的更改:
 
-* 新添加了一个文本后处理的tab
+* 新添加了一个文本后处理的tab：
+![Alt text](docs/text_postprocess.png)  
+    * 支持使用ChatGPT或Paddle auto punc（二选一）对文本自动添加合适的标点符号
+    * 支持使用pycorrector对文本进行纠错
+    * 支持去掉指定的语气助词
+    * 支持对输出文本的指定字符进行替换
 
 该App同时部署在：
 
@@ -200,4 +205,5 @@ registry.gitlab.com/aadnk/whisper-webui:latest
 
 - [ ] 如果是一个视频列表，只下载第一个视频
 - [ ] ~~如果已经转录完了再选翻译任务，则不重新转录~~
-- [ ] ~~目前翻译任务只能由任意语言翻译成英语，不能指定其他语言，要能支持翻译成其他语言，至少支持中文~~
+- [ ] ~~目前翻译任务只能由任意语言翻译成英语，不能指定其他语言，要能支持翻译成其他语言，至少支持中文~~\
+- [ ] 使用ChatGPT自动纠正错别字和添加标点符号

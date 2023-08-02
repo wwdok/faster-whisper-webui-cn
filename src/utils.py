@@ -1,12 +1,14 @@
 import textwrap
 import unicodedata
 import re
-
+import time
 import zlib
 from typing import Iterator, TextIO, Union
 import tqdm
-
+import pyperclip
 import urllib3
+import openai
+import tiktoken
 
 
 def exact_div(x, y):
@@ -243,3 +245,150 @@ def download_file(url: str, destination: str):
 
                     output.write(buffer)
                     loop.update(len(buffer))
+
+# -------------used for text post processing tab----------------
+system_prompt = "You are a helpful assistant."
+user_prompt = "请帮我把下面的文本纠正错别字并添加合适的标点符号，返回的消息只要处理后的文本："
+
+def get_chunks(s, maxlength, separator=None):
+    start = 0
+    end = 0
+    while start + maxlength  < len(s) and end != -1:
+        if separator is not None:
+            end = s.rfind(separator, start, start + maxlength + 1)
+            segment = s[start:end]
+            yield segment.replace(separator, "")
+            start = end +1
+        else:
+            end = start + maxlength
+            yield s[start:end]
+            start = end
+
+    yield s[start:]
+    
+def post_processing(text, use_chatgpt, user_token, apply_correction, auto_punc, separator, remove_words):
+    # print(f"==>> separator: {separator}")
+    original_separator1 = " "
+    original_separator2 = ","
+    
+    if use_chatgpt == True:
+        if user_token == "":
+            text = "请先设置你的OpenAI API Key，然后再重试"
+            return text
+        else:
+            text = chat_with_gpt(text, system_prompt, user_prompt)
+            return text
+    # 对于长文本需要先分段再推理，推理完再合并    
+    elif auto_punc == True:
+        # 自动分段文本之前先去除原有的标点符号
+        text = text.replace(original_separator1, "") 
+        text = text.replace(original_separator2, "") 
+        import paddlehub as hub
+        model = hub.Module(name='auto_punc', version='1.0.0')
+        t3 = time.time()
+        # split long text to short text less than max_length and store them in list
+        max_length = 256
+        chunks = list(get_chunks(text, max_length))
+        results = []
+        results = model.add_puncs(chunks, max_length=max_length)
+        text = "，".join(results) # 分段处硬编码成使用中文逗号分割
+        t4 = time.time()
+        print("Auto punc finished. Cost time: {:.2f}s".format(t4-t3))
+    # print(f"==>> text after auto punc: {text}")
+    else:    
+        # 将空格全部统一替换成一种分隔符
+        if separator == "\\n":
+            # 直接使用separator会无法换行
+            text = text.replace(original_separator1, "\n") 
+            text = text.replace(original_separator2, "\n") 
+        else:
+            text = text.replace(original_separator1, separator)
+            text = text.replace(original_separator2, separator)
+
+    if apply_correction == True:
+        import pycorrector
+        print("Start correcting...")
+        t1 = time.time()
+        text, detail = pycorrector.correct(text)
+        t2 = time.time()
+        print("Correcting finished. Cost time: {:.2f}s".format(t2-t1))
+        print(f"==>> detail: {detail}")
+
+    # 去掉语气词
+    t5 = time.time()
+    remove_words = remove_words.split("，") + remove_words.split(",") + remove_words.split(" ")
+    for word in remove_words:
+        text = text.replace(word, "")
+    t6 = time.time()
+    print("Remove words finished. Cost time: {:.2f}s".format(t6-t5))
+
+    return text
+    
+def replace(text, src_word, target_word):
+    text = text.replace(src_word, target_word)
+    return text
+    
+def copy_text(text):
+    pyperclip.copy(text)
+
+def num_tokens_from_messages(message):
+    """Return the number of tokens used by a list of messages."""
+    model="gpt-3.5-turbo-0613"
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        print("Warning: model not found. Using cl100k_base encoding.")
+        encoding = tiktoken.get_encoding("cl100k_base")
+    if model in {
+        "gpt-3.5-turbo-0613",
+        "gpt-3.5-turbo-16k-0613",
+        "gpt-4-0314",
+        "gpt-4-32k-0314",
+        "gpt-4-0613",
+        "gpt-4-32k-0613",
+        }:
+        tokens_per_message = 3
+        tokens_per_name = 1
+    elif model == "gpt-3.5-turbo-0301":
+        tokens_per_message = 4  # every message follows <|start|>{role/name}\n{content}<|end|>\n
+        tokens_per_name = -1  # if there's a name, the role is omitted
+    elif "gpt-3.5-turbo" in model:
+        print("Warning: gpt-3.5-turbo may update over time. Returning num tokens assuming gpt-3.5-turbo-0613.")
+        return num_tokens_from_messages(message, model="gpt-3.5-turbo-0613")
+    elif "gpt-4" in model:
+        print("Warning: gpt-4 may update over time. Returning num tokens assuming gpt-4-0613.")
+        return num_tokens_from_messages(message, model="gpt-4-0613")
+    else:
+        raise NotImplementedError(
+            f"""num_tokens_from_messages() is not implemented for model {model}. See https://github.com/openai/openai-python/blob/main/chatml.md for information on how messages are converted to tokens."""
+        )
+    num_tokens = 0
+    num_tokens += tokens_per_message
+    message = user_prompt + message
+    num_tokens += len(encoding.encode(message))
+    num_tokens += 3  # every reply is primed with <|start|>assistant<|message|>
+    return f"Tokens 计数: {num_tokens}"
+
+def on_token_change(user_token):
+    openai.api_key = user_token
+
+def chat_with_gpt(input_message, system_prompt, user_prompt, temperature=0, max_tokens=4096):
+    system_content = [{ "role": "system", "content": system_prompt }]
+    user_content = [{ "role": "user", "content":  user_prompt + input_message }]
+    try:
+        completion = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=system_content + user_content, temperature=temperature, max_tokens=max_tokens)
+        response_msg = completion.choices[0].message['content']
+
+        prompt_tokens = completion['usage']['prompt_tokens']
+        completion_tokens = completion['usage']['completion_tokens']
+        total_tokens = completion['usage']['total_tokens']
+        print(f"==>> prompt_tokens: {prompt_tokens}")
+        print(f"==>> completion_tokens: {completion_tokens}")
+        print(f"==>> total_tokens: {total_tokens}")
+        return response_msg
+    
+    except Exception as e:
+        return f"Error: {e}"
+
+    
+# -------------used for text post processing tab----------------
