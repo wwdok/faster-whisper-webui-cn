@@ -14,16 +14,23 @@ Check out the configuration reference at https://huggingface.co/docs/hub/spaces-
 
 Fork from : https://huggingface.co/spaces/aadnk/faster-whisper-webui/tree/main
 
-我的更改:
+# 简介
 
-* 新添加了一个文本后处理的tab：
+这个Gradio App的主要作用是把哔哩哔哩或youtube等网站的视频的音频或其他来源的音频转录成文本，并对文本进行一些后处理。
+
+我二次开发这个App的初衷是用来给无字幕的视频做笔记。
+
+转录界面：
+![Alt text](docs/simple_transcribe_ui.png)
+
+我主要添加了一个文本后处理的tab：
 ![Alt text](docs/text_postprocess.png)  
-    * 支持使用ChatGPT或Paddle auto punc（二选一）对文本自动添加合适的标点符号
-    * 支持使用pycorrector对文本进行纠错
-    * 支持去掉指定的语气助词
-    * 支持对输出文本的指定字符进行替换
+* 支持使用ChatGPT或Paddle auto punc（二选一）对文本自动添加合适的标点符号
+* 支持使用pycorrector对文本进行纠错
+* 支持去掉指定的语气助词
+* 支持对输出文本的指定字符进行替换
 
-该App同时部署在：
+该Gradio App同时部署在：
 
 * HuggingFace Spaces: https://huggingface.co/spaces/wwdok/faster-whisper-webui-cn
 * OpenXLab: https://openxlab.org.cn/apps/detail/wwdok/faster-whisper-webui

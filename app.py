@@ -545,6 +545,7 @@ def create_ui(app_config: ApplicationConfig):
             Whisper是OpenAI开源的一个多语言语音识别模型，可以用来将音频转换为文本。\n
             faster-whisper 是使用 CTranslate2 对 OpenAI Whisper 模型的重新实现，CTranslate2 是 Transformer 模型的快速推理引擎。\n
             此实现比 OpenAI Whisper 快 4 倍，同时使用更少的内存，达到相同的精度。\n
+            您只需要一个视频网址链接，或实时录制音频，或上传本地音频文件，该App会将音频转录成文本，您还可以对转录得到的文本进行二次编辑。\n
             对于非英语的较长音频文件（>10 分钟），建议您在 VAD 选项中选择 Silero VAD（Voice Activity Detector）。\n
             最大音频文件长度：1800秒=30分钟。\n
             项目github地址：https://github.com/wwdok/faster-whisper-webui-cn
