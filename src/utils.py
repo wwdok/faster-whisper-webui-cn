@@ -301,7 +301,7 @@ def post_processing(text, use_chatgpt, user_token, apply_correction, auto_punc, 
             # 直接使用separator会无法换行
             text = text.replace(original_separator1, "\n") 
             text = text.replace(original_separator2, "\n") 
-        else:
+        elif separator != "": # 当separator为空时不替换，便于该tab可以单独使用
             text = text.replace(original_separator1, separator)
             text = text.replace(original_separator2, separator)
 

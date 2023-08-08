@@ -644,7 +644,7 @@ def create_ui(app_config: ApplicationConfig):
                 apply_correction = gr.Checkbox(label="使用pycorrector纠正错别字", value=False)
                 auto_punc = gr.Checkbox(label="使用paddle auto punc自动添加标点符号", value=False)
                 separator = gr.Text(label="使用统一的标点符号(比如逗号，或换行\\n)", value="，")
-                remove_words = gr.Text(label="去掉的语气助词", value="呢，啊，哦，嗯，嘛，吧，呀，哈，哇，呐，噢，嘞，嘛")
+                remove_words = gr.Text(label="去掉的语气助词", value="呢，啊，哦，嗯，嘛，吧，呀，哈，哇，呐，噢，嘞，哎")
                 submit_btn = gr.Button("提交")
             with gr.Column():
                 output_text = gr.TextArea(label="输出文本", interactive=True).style(show_copy_button=True)
