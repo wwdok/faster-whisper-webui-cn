@@ -33,8 +33,8 @@ Fork from : https://huggingface.co/spaces/aadnk/faster-whisper-webui/tree/main
 该Gradio App同时部署在：
 
 * HuggingFace Spaces: https://huggingface.co/spaces/wwdok/faster-whisper-webui-cn
-* OpenXLab: https://openxlab.org.cn/apps/detail/wwdok/faster-whisper-webui
-* ModelScope: https://modelscope.cn/studios/wwd123/faster-whisper-webui-cn
+* OpenXLab: https://openxlab.org.cn/apps/detail/wwdok/faster-whisper-webui-cn
+* ~~ModelScope: https://modelscope.cn/studios/wwd123/faster-whisper-webui-cn~~
 
 # Running Locally
 
