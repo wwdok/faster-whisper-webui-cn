@@ -547,7 +547,6 @@ def create_ui(app_config: ApplicationConfig):
             此实现比 OpenAI Whisper 快 4 倍，同时使用更少的内存，达到相同的精度。\n
             您只需要一个视频网址链接，或实时录制音频，或上传本地音频文件，该App会将音频转录成文本，您还可以对转录得到的文本进行二次编辑。\n
             对于非英语的较长音频文件（>10 分钟），建议您在 VAD 选项中选择 Silero VAD（Voice Activity Detector）。\n
-            最大音频文件长度：1800秒=30分钟。\n
             项目github地址：https://github.com/wwdok/faster-whisper-webui-cn
             """
         )
@@ -704,7 +703,7 @@ if __name__ == '__main__':
     parser.add_argument("--vad_cpu_cores", type=int, default=default_app_config.vad_cpu_cores, \
                         help="The number of CPU cores to use for VAD pre-processing.") # 1
     parser.add_argument("--vad_process_timeout", type=float, default=default_app_config.vad_process_timeout, \
-                        help="The number of seconds before inactivate processes are terminated. Use 0 to close processes immediately, or None for no timeout.") # 1800
+                        help="The number of seconds before inactivate processes are terminated. Use 0 to close processes immediately, or None for no timeout.")
     parser.add_argument("--auto_parallel", type=bool, default=default_app_config.auto_parallel, \
                         help="True to use all available GPUs and CPU cores for processing. Use vad_cpu_cores/vad_parallel_devices to specify the number of CPU cores/GPUs to use.") # False
     parser.add_argument("--output_dir", "-o", type=str, default=default_app_config.output_dir, \
