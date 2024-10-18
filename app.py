@@ -44,7 +44,7 @@ MAX_FILE_PREFIX_LENGTH = 17
 # Limit auto_parallel to a certain number of CPUs (specify vad_cpu_cores to get a higher number)
 MAX_AUTO_CPU_CORES = 8
 
-WHISPER_MODELS = ["tiny", "base", "small", "medium", "large", "large-v1", "large-v2"]
+WHISPER_MODELS = ["tiny", "base", "small", "medium", "large", "large-v1", "large-v2", "large-v3", "large-v3-turbo"]
 
 class VadOptions:
     def __init__(self, vad: str = None, vadMergeWindow: float = 5, vadMaxMergeSize: float = 150, vadPadding: float = 1, vadPromptWindow: float = 1, 
